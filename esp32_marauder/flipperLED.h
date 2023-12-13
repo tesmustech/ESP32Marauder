@@ -1,3 +1,5 @@
+#pragma once
+
 #ifndef flipperLED_h
 #define flipperLED_h
 
@@ -16,6 +18,7 @@ class flipperLED {
 
   public:
     void RunSetup();
+    void main();
     void attackLED();
     void sniffLED();
     void offLED();

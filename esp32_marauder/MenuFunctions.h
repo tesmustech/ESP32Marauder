@@ -1,3 +1,5 @@
+#pragma once
+
 #ifndef MenuFunctions_h
 #define MenuFunctions_h
 
@@ -8,15 +10,11 @@
 #define BATTERY_ANALOG_ON 0
 
 #include "WiFiScan.h"
-#include "Display.h"
 #include "BatteryInterface.h"
 #include "SDInterface.h"
-#include "Web.h"
-#include "esp_interface.h"
-#include "a32u4_interface.h"
 #include "settings.h"
 
-#ifdef MARAUDER_MINI
+#ifdef HAS_BUTTONS
   #include <SwitchLib.h>
   extern SwitchLib u_btn;
   extern SwitchLib d_btn;
@@ -25,13 +23,9 @@
   extern SwitchLib c_btn;
 #endif
 
-extern Display display_obj;
 extern WiFiScan wifi_scan_obj;
-extern Web web_obj;
 extern SDInterface sd_obj;
 extern BatteryInterface battery_obj;
-extern EspInterface esp_obj;
-extern A32u4Interface a32u4_obj;
 extern Settings settings_obj;
 
 #define FLASH_BUTTON 0
@@ -68,17 +62,15 @@ extern Settings settings_obj;
 #define STATUS_BAT 22
 #define STATUS_SD 23
 #define PWNAGOTCHI 24
-#define ESPRESSIF 25
-#define SHUTDOWN 26
-#define BEACON_LIST 27
-#define GENERATE 28
-#define CLEAR_ICO 29
-#define KEYBOARD_ICO 30
-#define JOIN_WIFI 31
-#define ESP_UPDATE_ICO 32
-#define BAD_USB_ICO 33
-#define TEST_BAD_USB_ICO 34
-#define LANGUAGE 35
+#define SHUTDOWN 25
+#define BEACON_LIST 26
+#define GENERATE 27
+#define CLEAR_ICO 28
+#define KEYBOARD_ICO 29
+#define JOIN_WIFI 30
+#define LANGUAGE 31
+#define STATUS_GPS 32
+#define GPS_MENU 33
 
 PROGMEM void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p);
 PROGMEM bool my_touchpad_read(lv_indev_drv_t * indev_driver, lv_indev_data_t * data);
@@ -87,15 +79,11 @@ PROGMEM static lv_disp_buf_t disp_buf;
 PROGMEM static lv_color_t buf[LV_HOR_RES_MAX * 10];
 
 PROGMEM static void ta_event_cb(lv_obj_t * ta, lv_event_t event);
-PROGMEM static void join_wifi_keyboard_event_cb(lv_obj_t * keyboard, lv_event_t event);
 PROGMEM static void add_ssid_keyboard_event_cb(lv_obj_t * keyboard, lv_event_t event);
-PROGMEM static void write_bad_usb_keyboard_event_cb(lv_obj_t * keyboard, lv_event_t event);
-PROGMEM static void load_btn_cb(lv_obj_t * load_btn, lv_event_t event);
-PROGMEM static void test_btn_cb(lv_obj_t * load_btn, lv_event_t event);
+PROGMEM static void html_list_cb(lv_obj_t * btn, lv_event_t event);
 PROGMEM static void ap_list_cb(lv_obj_t * btn, lv_event_t event);
 PROGMEM static void station_list_cb(lv_obj_t * btn, lv_event_t event);
 PROGMEM static void setting_dropdown_cb(lv_obj_t * btn, lv_event_t event);
-PROGMEM static void save_as_keyboard_event_cb(lv_obj_t * keyboard, lv_event_t event);
 
 // lvgl stuff
 PROGMEM static lv_obj_t *kb;
@@ -107,9 +95,9 @@ struct Menu;
 
 struct MenuNode {
   String name;
-  String command;
+  bool command;
   uint16_t color;
-  int icon;
+  uint8_t icon;
   TFT_eSPI_Button* button;
   bool selected;
   std::function<void()> callable;
@@ -131,8 +119,8 @@ class MenuFunctions
     String u_result = "";
 
     uint32_t initTime = 0;
+    uint8_t menu_start_index = 0;
 
-    //Menu* current_menu;
 
     // Main menu stuff
     Menu mainMenu;
@@ -140,14 +128,12 @@ class MenuFunctions
     Menu wifiMenu;
     Menu bluetoothMenu;
     Menu badusbMenu;
-    Menu generalMenu;
     Menu deviceMenu;
 
     // Device menu stuff
     Menu whichUpdateMenu;
     Menu failedUpdateMenu;
     Menu confirmMenu;
-    Menu espUpdateMenu;
     Menu updateMenu;
     Menu settingsMenu;
     Menu specSettingMenu;
@@ -160,13 +146,14 @@ class MenuFunctions
     Menu wifiGeneralMenu;
     Menu wifiAPMenu;
 
+    // WiFi General Menu
+    Menu htmlMenu;
+
     // Bluetooth menu stuff
     Menu bluetoothSnifferMenu;
-    Menu bluetoothGeneralMenu;
+    Menu bluetoothAttackMenu;
 
     // Settings things menus
-    Menu shutdownWiFiMenu;
-    Menu shutdownBLEMenu;
     Menu generateSSIDsMenu;
 
     static void lv_tick_handler();
@@ -174,7 +161,6 @@ class MenuFunctions
     // Menu icons
 
 
-    //TFT_eSPI_Button key[BUTTON_ARRAY_LEN];
 
     void addNodes(Menu* menu, String name, uint16_t color, Menu* child, int place, std::function<void()> callable, bool selected = false, String command = "");
     void updateStatusBar();
@@ -184,8 +170,10 @@ class MenuFunctions
     String callSetting(String key);
     void runBoolSetting(String ley);
     void displaySetting(String key, Menu* menu, int index);
-    void buttonSelected(uint8_t b);
-    void buttonNotSelected(uint8_t b);
+    void buttonSelected(uint8_t b, int8_t x = -1);
+    void buttonNotSelected(uint8_t b, int8_t x = -1);
+
+    uint8_t updateTouch(uint16_t *x, uint16_t *y, uint16_t threshold = 600);
 
   public:
     MenuFunctions();
@@ -193,6 +181,11 @@ class MenuFunctions
     Menu* current_menu;
     Menu clearSSIDsMenu;
     Menu clearAPsMenu;
+
+    #ifdef HAS_GPS
+      // GPS Menu
+      Menu gpsInfoMenu;
+    #endif
 
     Ticker tick;
 
@@ -203,17 +196,14 @@ class MenuFunctions
 
     void initLVGL();
     void deinitLVGL();
-    void joinWiFiGFX();
+    void selectEPHTMLGFX();
     void addSSIDGFX();
     void addAPGFX();
     void addStationGFX();
-    void displaySettingsGFX();
-    void writeBadUSB();
-
-    void buildButtons(Menu* menu, int starting_index = 0);
+    void buildButtons(Menu* menu, int starting_index = 0, String button_name = "");
     void changeMenu(Menu* menu);
     void drawStatusBar();
-    void displayCurrentMenu();
+    void displayCurrentMenu(uint8_t start_index = 0);
     void main(uint32_t currentTime);
     void RunSetup();
     void orientDisplay();

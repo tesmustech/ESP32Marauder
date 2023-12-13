@@ -1,83 +1,167 @@
 #include "SDInterface.h"
 #include "lang_var.h"
 
-bool SDInterface::initSD() {
-  String display_string = "";
 
-  #ifdef KIT
-    pinMode(SD_DET, INPUT);
-    if (digitalRead(SD_DET) == LOW) {
-      Serial.println(F("SD Card Detect Pin Detected"));
-    }
-    else {
-      Serial.println(F("SD Card Detect Pin Not Detected"));
+bool SDInterface::initSD() {
+  #ifdef HAS_SD
+    String display_string = "";
+
+    #ifdef KIT
+      pinMode(SD_DET, INPUT);
+      if (digitalRead(SD_DET) == LOW) {
+        Serial.println(F("SD Card Detect Pin Detected"));
+      }
+      else {
+        Serial.println(F("SD Card Detect Pin Not Detected"));
+        this->supported = false;
+        return false;
+      }
+    #endif
+
+    pinMode(SD_CS, OUTPUT);
+
+    delay(10);
+    #if defined(MARAUDER_M5STICKC)
+      /* Set up SPI SD Card using external pin header
+      StickCPlus Header - SPI SD Card Reader
+                  3v3   -   3v3
+                  GND   -   GND
+                   G0   -   CLK
+              G36/G25   -   MISO
+                  G26   -   MOSI
+                        -   CS (jumper to SD Card GND Pin)
+      */
+      enum { SPI_SCK = 0, SPI_MISO = 36, SPI_MOSI = 26 };
+      SPIClass SPI_EXT;
+      SPI_EXT.begin(SPI_SCK, SPI_MISO, SPI_MOSI, SD_CS);
+      if (!SD.begin(SD_CS, SPI_EXT)) {
+    #else
+      if (!SD.begin(SD_CS)) {
+    #endif
+      Serial.println(F("Failed to mount SD Card"));
       this->supported = false;
       return false;
     }
-  #endif
+    else {
+      this->supported = true;
+      this->cardType = SD.cardType();
+      //if (cardType == CARD_MMC)
+      //  Serial.println(F("SD: MMC Mounted"));
+      //else if(cardType == CARD_SD)
+      //    Serial.println(F("SD: SDSC Mounted"));
+      //else if(cardType == CARD_SDHC)
+      //    Serial.println(F("SD: SDHC Mounted"));
+      //else
+      //    Serial.println(F("SD: UNKNOWN Card Mounted"));
 
-  pinMode(SD_CS, OUTPUT);
+      this->cardSizeMB = SD.cardSize() / (1024 * 1024);
+    
+      //Serial.printf("SD Card Size: %lluMB\n", this->cardSizeMB);
 
-  delay(10);
+      if (this->supported) {
+        const int NUM_DIGITS = log10(this->cardSizeMB) + 1;
+
+        char sz[NUM_DIGITS + 1];
+
+        sz[NUM_DIGITS] =  0;
+        for ( size_t i = NUM_DIGITS; i--; this->cardSizeMB /= 10)
+        {
+            sz[i] = '0' + (this->cardSizeMB % 10);
+            display_string.concat((String)sz[i]);
+        }
   
-  if (!SD.begin(SD_CS)) {
-    Serial.println(F("Failed to mount SD Card"));
-    this->supported = false;
-    return false;
-  }
-  else {
-    this->supported = true;
-    this->cardType = SD.cardType();
-    //if (cardType == CARD_MMC)
-    //  Serial.println(F("SD: MMC Mounted"));
-    //else if(cardType == CARD_SD)
-    //    Serial.println(F("SD: SDSC Mounted"));
-    //else if(cardType == CARD_SDHC)
-    //    Serial.println(F("SD: SDHC Mounted"));
-    //else
-    //    Serial.println(F("SD: UNKNOWN Card Mounted"));
-
-    this->cardSizeMB = SD.cardSize() / (1024 * 1024);
-    
-    //Serial.printf("SD Card Size: %lluMB\n", this->cardSizeMB);
-
-    if (this->supported) {
-      const int NUM_DIGITS = log10(this->cardSizeMB) + 1;
-    
-      char sz[NUM_DIGITS + 1];
-     
-      sz[NUM_DIGITS] =  0;
-      for ( size_t i = NUM_DIGITS; i--; this->cardSizeMB /= 10)
-      {
-          sz[i] = '0' + (this->cardSizeMB % 10);
-          display_string.concat((String)sz[i]);
+        this->card_sz = sz;
       }
-  
-      this->card_sz = sz;
-    }
 
-    buffer_obj = Buffer();
+      buffer_obj = Buffer();
     
-    if (!SD.exists("/SCRIPTS")) {
-      Serial.println("/SCRIPTS does not exist. Creating...");
+      if (!SD.exists("/SCRIPTS")) {
+        Serial.println("/SCRIPTS does not exist. Creating...");
 
-      SD.mkdir("/SCRIPTS");
-      Serial.println("/SCRIPTS created");
-    }
+        SD.mkdir("/SCRIPTS");
+        Serial.println("/SCRIPTS created");
+      }
     
-    return true;
+      return true;
+  }
+
+  #else
+    Serial.println("SD support disabled, skipping init");
+    return false;
+  #endif
+}
+
+File SDInterface::getFile(String path) {
+  if (this->supported) {
+    File file = SD.open(path, FILE_READ);
+
+    //if (file)
+    return file;
   }
 }
 
-void SDInterface::addPacket(uint8_t* buf, uint32_t len) {
+void SDInterface::listDirToLinkedList(LinkedList<String>* file_names, String str_dir, String ext) {
+  if (this->supported) {
+    File dir = SD.open(str_dir);
+    while (true)
+    {
+      File entry = dir.openNextFile();
+      if (!entry)
+      {
+        break;
+      }
+      if (ext != "") {
+        String file_name = entry.name();
+        if (file_name.endsWith(ext)) {
+          file_names->add(file_name);
+        }
+      }
+    }
+  }
+}
+
+void SDInterface::listDir(String str_dir){
+  if (this->supported) {
+    File dir = SD.open(str_dir);
+    while (true)
+    {
+      File entry = dir.openNextFile();
+      if (! entry)
+      {
+        break;
+      }
+      //for (uint8_t i = 0; i < numTabs; i++)
+      //{
+      //  Serial.print('\t');
+      //}
+      Serial.print(entry.name());
+      Serial.print("\t");
+      Serial.println(entry.size());
+      entry.close();
+    }
+  }
+}
+
+void SDInterface::addPacket(uint8_t* buf, uint32_t len, bool log) {
   if ((this->supported) && (this->do_save)) {
-    buffer_obj.addPacket(buf, len);
+    buffer_obj.addPacket(buf, len, log);
   }
 }
 
 void SDInterface::openCapture(String file_name) {
-  if (this->supported)
-    buffer_obj.open(&SD, file_name);
+  bool save_pcap = settings_obj.loadSetting<bool>("SavePCAP");
+  if ((this->supported) && (save_pcap)) {
+    buffer_obj.createPcapFile(&SD, file_name);
+    buffer_obj.open();
+  }
+}
+
+void SDInterface::openLog(String file_name) {
+  bool save_pcap = settings_obj.loadSetting<bool>("SavePCAP");
+  if ((this->supported) && (save_pcap)) {
+    buffer_obj.createPcapFile(&SD, file_name, true);
+    buffer_obj.open(true);
+  }
 }
 
 void SDInterface::runUpdate() {
@@ -97,7 +181,7 @@ void SDInterface::runUpdate() {
         display_obj.tft.setTextColor(TFT_RED);
         display_obj.tft.println(F(text_table2[0]));
       #endif
-      Serial.println(F("Error, update.bin is not a file"));
+      Serial.println(F("Error, could not find \"update.bin\""));
       #ifdef HAS_SCREEN
         display_obj.tft.setTextColor(TFT_WHITE);
       #endif
@@ -111,7 +195,7 @@ void SDInterface::runUpdate() {
       #ifdef HAS_SCREEN
         display_obj.tft.println(F(text_table2[1]));
       #endif
-      Serial.println(F("Try to start update"));
+      Serial.println(F("Starting update over SD. Please wait..."));
       this->performUpdate(updateBin, updateSize);
     }
     else {

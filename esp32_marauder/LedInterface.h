@@ -1,3 +1,5 @@
+#pragma once
+
 #ifndef LedInterface_h
 #define LedInterface_h
 
@@ -12,6 +14,7 @@
 #define MODE_RAINBOW 1
 #define MODE_ATTACK 2
 #define MODE_SNIFF 3
+#define MODE_CUSTOM 4
 
 extern Settings settings_obj;
 extern Adafruit_NeoPixel strip;
@@ -41,6 +44,7 @@ class LedInterface {
     void main(uint32_t currentTime);
 
     void setMode(uint8_t);
+    void setColor(int r, int g, int b);
     uint8_t getMode();
     
   

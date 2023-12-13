@@ -1,3 +1,5 @@
+#pragma once
+
 #ifndef BatteryInterface_h
 #define BatteryInterface_h
 
@@ -5,9 +7,7 @@
 
 #include "configs.h"
 
-#ifndef MARAUDER_FLIPPER
-  #include <Wire.h>
-#endif
+#include <Wire.h>
 
 #define I2C_SDA 33
 #define I2C_SCL 22

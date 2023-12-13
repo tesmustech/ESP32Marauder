@@ -6,32 +6,44 @@ Buffer::Buffer(){
   bufB = (uint8_t*)malloc(BUF_SIZE);
 }
 
-void Buffer::open(fs::FS* fs, String fn){
+void Buffer::createPcapFile(fs::FS* fs, String fn, bool log){
   int i=0;
-  do{
-    fileName = "/"+fn+"_"+(String)i+".pcap";
-    i++;
-  } while(fs->exists(fileName));
+  if (!log) {
+    do{
+      fileName = "/"+fn+"_"+(String)i+".pcap";
+      i++;
+    } while(fs->exists(fileName));
+  }
+  else {
+    do{
+      fileName = "/"+fn+"_"+(String)i+".log";
+      i++;
+    } while(fs->exists(fileName));
+  }
 
   Serial.println(fileName);
   
   file = fs->open(fileName, FILE_WRITE);
   file.close();
+}
 
+void Buffer::open(bool log){
   bufSizeA = 0;
   bufSizeB = 0;
-  
-  writing = true;
-  
-  write(uint32_t(0xa1b2c3d4)); // magic number
-  write(uint16_t(2)); // major version number
-  write(uint16_t(4)); // minor version number
-  write(int32_t(0)); // GMT to local correction
-  write(uint32_t(0)); // accuracy of timestamps
-  write(uint32_t(SNAP_LEN)); // max length of captured packets, in octets
-  write(uint32_t(105)); // data link type
 
-  //useSD = true;
+  bufSizeB = 0;
+
+  writing = true;
+
+  if (!log) {
+    write(uint32_t(0xa1b2c3d4)); // magic number
+    write(uint16_t(2)); // major version number
+    write(uint16_t(4)); // minor version number
+    write(int32_t(0)); // GMT to local correction
+    write(uint32_t(0)); // accuracy of timestamps
+    write(uint32_t(SNAP_LEN)); // max length of captured packets, in octets
+    write(uint32_t(105)); // data link type
+  }
 }
 
 void Buffer::close(fs::FS* fs){
@@ -41,8 +53,7 @@ void Buffer::close(fs::FS* fs){
   Serial.println(text01);
 }
 
-void Buffer::addPacket(uint8_t* buf, uint32_t len){
-  
+void Buffer::addPacket(uint8_t* buf, uint32_t len, bool log){
   // buffer is full -> drop packet
   if((useA && bufSizeA + len >= BUF_SIZE && bufSizeB > 0) || (!useA && bufSizeB + len >= BUF_SIZE && bufSizeA > 0)){
     //Serial.print(";"); 
@@ -63,10 +74,12 @@ void Buffer::addPacket(uint8_t* buf, uint32_t len){
 
   microSeconds -= seconds*1000*1000; // e.g. 45200400 - 45*1000*1000 = 45200400 - 45000000 = 400us (because we only need the offset)
   
-  write(seconds); // ts_sec
-  write(microSeconds); // ts_usec
-  write(len); // incl_len
-  write(len); // orig_len
+  if (!log) {
+    write(seconds); // ts_sec
+    write(microSeconds); // ts_usec
+    write(len); // incl_len
+    write(len); // orig_len
+  }
   
   write(buf, len); // packet payload
 }
@@ -197,6 +210,37 @@ void Buffer::forceSave(fs::FS* fs){
   file.close();
 
   //Serial.printf("saved %u bytes\n",len);
+
+  saving = false;
+  writing = true;
+}
+
+void Buffer::forceSaveSerial() {
+  uint32_t len = bufSizeA + bufSizeB;
+  if(len == 0) return;
+
+  saving = true;
+  writing = false;
+
+  if(useA){
+    if(bufSizeB > 0){
+      Serial1.write(bufB, bufSizeB);
+      bufSizeB = 0;
+    }
+    if(bufSizeA > 0){
+      Serial1.write(bufA, bufSizeA);
+      bufSizeA = 0;
+    }
+  } else {
+    if(bufSizeA > 0){
+      Serial1.write(bufA, bufSizeA);
+      bufSizeA = 0;
+    }
+    if(bufSizeB > 0){
+      Serial1.write(bufB, bufSizeB);
+      bufSizeB = 0;
+    }
+  }
 
   saving = false;
   writing = true;
