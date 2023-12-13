@@ -353,6 +353,7 @@
 
   #ifdef MARAUDER_FLIPPER
     #define SD_CS 10
+    #define KIT_LED_BUILTIN 40
   #endif
 
   #ifdef ESP32_LDDB
