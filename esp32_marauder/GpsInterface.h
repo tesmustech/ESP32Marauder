@@ -4,7 +4,7 @@
 #define GpsInterface_h
 
 #include <MicroNMEA.h>
-#include <SoftwareSerial.h>
+//#include <SoftwareSerial.h>
 #include <LinkedList.h>
 
 #include "configs.h"
@@ -60,7 +60,7 @@ class GpsInterface {
     float altf = 0.0;
     float accuracy = 0.0;
     String datetime = "";
-    
+
     bool gps_enabled = false;
     bool good_fix = false;
     uint8_t num_sats = 0;
